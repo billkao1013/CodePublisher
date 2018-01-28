@@ -1,0 +1,122 @@
+<html>
+	<head>
+<link rel="stylesheet" type="text/css" href="style.css">
+<script type="text/javascript" src="jsuse.js"></script>	</head>
+<body>
+	<h4>Utilities.cpp</h4>
+<hr/><div class="indent">	
+	<h4>Dependencies</h4>
+	<a href="Utilities.h.html">Utilities.h</a>
+</div>	<hr/>
+<PRE>
+///////////////////////////////////////////////////////////////////////
+// Utilities.cpp - small, generally usefule, helper classes          //
+// ver 1.2                                                           //
+// Language:    C++, Visual Studio 2015                              //
+// Application: Most Projects, CSE687 - Object Oriented Design       //
+// Author:      Jim Fawcett, Syracuse University, CST 4-187          //
+//              jfawcett@twcny.rr.com                                //
+///////////////////////////////////////////////////////////////////////
+
+#include &lt;cctype&gt;
+#include &lt;iostream&gt;
+#include "Utilities.h"
+
+using namespace Utilities;
+
+std::function&lt;void(const std::string&)&gt; Title =
+  [](auto src) <button type="button" sytle= "display:inline" onclick="showHide('id0');">+</button><div id="id0" style="">{ StringHelper::Title(src, '='); </div>};
+
+std::function&lt;void(const std::string&)&gt; title =
+  [](auto src) <button type="button" sytle= "display:inline" onclick="showHide('id1');">+</button><div id="id1" style="">{ StringHelper::Title(src, '-'); </div>};
+
+void StringHelper::title(const std::string& src)
+<button type="button" sytle= "display:inline" onclick="showHide('id2');">+</button><div id="id2" style="">{
+  std::cout &lt;&lt; "\n  " &lt;&lt; src;
+  std::cout &lt;&lt; "\n " &lt;&lt; std::string(src.size() + 2, '-');
+</div>}
+
+void StringHelper::Title(const std::string& src, char underline)
+<button type="button" sytle= "display:inline" onclick="showHide('id3');">+</button><div id="id3" style="">{
+  std::cout &lt;&lt; "\n  " &lt;&lt; src;
+  std::cout &lt;&lt; "\n " &lt;&lt; std::string(src.size() + 2, underline);
+</div>}
+
+std::vector&lt;std::string&gt; StringHelper::split(const std::string& src)
+<button type="button" sytle= "display:inline" onclick="showHide('id4');">+</button><div id="id4" style="">{
+  std::vector&lt;std::string&gt; accum;
+  std::string temp;
+  size_t index = 0;
+  do
+  <button type="button" sytle= "display:inline" onclick="showHide('id5');">+</button><div id="id5" style="">{
+    while ((isspace(src[index]) || src[index] == ',') && src[index] != '\n')
+    <button type="button" sytle= "display:inline" onclick="showHide('id6');">+</button><div id="id6" style="">{
+      ++index;
+      if (temp.size() &gt; 0)
+      <button type="button" sytle= "display:inline" onclick="showHide('id7');">+</button><div id="id7" style="">{
+        accum.push_back(temp);
+        temp.clear();
+      </div>}
+    </div>}
+    if(src[index] != '\0')
+      temp += src[index];
+  </div>} while (index++ &lt; src.size());
+  if(temp.size() &gt; 0)
+    accum.push_back(temp);
+  return accum;
+</div>}
+
+void Utilities::putline()
+<button type="button" sytle= "display:inline" onclick="showHide('id8');">+</button><div id="id8" style="">{
+  std::cout &lt;&lt; "\n";
+</div>}
+
+#ifdef TEST_UTILITIES
+
+int main()
+<button type="button" sytle= "display:inline" onclick="showHide('id9');">+</button><div id="id9" style="">{
+  Title("Testing Utilities Package");
+  putline();
+
+  title("test StringHelper::split(std::string)");
+
+  std::string test = "a, \n, bc, de, efg, i, j k lm nopq rst";
+  std::cout &lt;&lt; "\n  test string = " &lt;&lt; test;
+  
+  std::vector&lt;std::string&gt; result = StringHelper::split(test);
+  
+  std::cout &lt;&lt; "\n";
+  for (auto item : result)
+  <button type="button" sytle= "display:inline" onclick="showHide('id10');">+</button><div id="id10" style="">{
+    if (item == "\n")
+      std::cout &lt;&lt; "\n  " &lt;&lt; "newline";
+    else
+      std::cout &lt;&lt; "\n  " &lt;&lt; item;
+  </div>}
+  std::cout &lt;&lt; "\n";
+
+  title("test std::string Converter&lt;T&gt;::toString(T)");
+
+  std::string conv1 = Converter&lt;double&gt;::toString(3.1415927);
+  std::string conv2 = Converter&lt;int&gt;::toString(73);
+  std::string conv3 = Converter&lt;std::string&gt;::toString("a_test_string plus more");
+
+  std::cout &lt;&lt; "\n  Converting from values to strings: ";
+  std::cout &lt;&lt; conv1 &lt;&lt; ", " &lt;&lt; conv2 &lt;&lt; ", " &lt;&lt; conv3;
+  putline();
+
+  title("test T Converter&lt;T&gt;::toValue(std::string)");
+
+  std::cout &lt;&lt; "\n  Converting from strings to values: ";
+  std::cout &lt;&lt; Converter&lt;double&gt;::toValue(conv1) &lt;&lt; ", ";
+  std::cout &lt;&lt; Converter&lt;int&gt;::toValue(conv2) &lt;&lt; ", ";
+  std::cout &lt;&lt; Converter&lt;std::string&gt;::toValue(conv3);
+
+  std::cout &lt;&lt; "\n\n";
+  return 0;
+</div>}
+#endif
+
+</PRE>
+</body>
+</html>

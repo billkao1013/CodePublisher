@@ -1,0 +1,11 @@
+
+<StrongComponent>
+  <SCC0>
+    <dependency filename="v3">
+    </dependency>
+    <dependency filename="v1">
+    </dependency>
+    <dependency filename="v2">
+    </dependency>
+  </SCC0>
+</StrongComponent>

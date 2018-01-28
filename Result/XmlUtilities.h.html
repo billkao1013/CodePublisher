@@ -1,0 +1,81 @@
+<html>
+	<head>
+<link rel="stylesheet" type="text/css" href="style.css">
+<script type="text/javascript" src="jsuse.js"></script>	</head>
+<body>
+	<h4>XmlUtilities.h</h4>
+<hr/><div class="indent">	
+	<h4>Dependencies</h4>
+	<a href="Utilities.h.html">Utilities.h</a>
+</div>	<hr/>
+<PRE>
+#pragma once
+///////////////////////////////////////////////////////////////////////
+// XmlUtilities.h - Utility class to convert template types to XML   //
+// ver 1.1                                                           //
+// Jim Fawcett, CSE687 - Object Oriented Design, Spring 2017         //
+///////////////////////////////////////////////////////////////////////
+/*
+* Package Operations:
+* -------------------
+* This package defines a single class, XmlConvert&lt;T&gt; that supports convering
+* instances of the T type to and from XML strings.
+*
+* Required Files:
+* ---------------
+*   XmlUtilities.h, XmlUtilities.cpp,
+*   XmlDocument static library
+*   Utilities.h, Utilities.cpp
+*
+* Maintenance History:
+*---------------------
+* ver 1.1 : 22 Feb 2017
+* - added these comments
+* ver 1.0 : 06 Feb 2017
+* - first release
+*/
+
+
+#include "../XmlDocument/XmlDocument/XmlDocument.h"
+#include "../XmlDocument/XmlElement/XmlElement.h"
+#include "../Utilities/Utilities.h"
+#include &lt;vector&gt;
+
+namespace XmlProcessing
+<button type="button" sytle= "display:inline" onclick="showHide('id0');">+</button><div id="id0" style="">{
+  template&lt;typename T&gt;
+  class XmlConvert
+  <button type="button" sytle= "display:inline" onclick="showHide('id1');">+</button><div id="id1" style="">{
+  public:
+    using SPtr = std::shared_ptr&lt;AbstractXmlElement&gt;;
+
+    static SPtr toXmlElement(const T& t, const std::string& tag);
+    static T fromXmlElement(SPtr sElem);
+  </div>};
+
+  template&lt;typename T&gt;
+  typename XmlConvert&lt;T&gt;::SPtr XmlConvert&lt;T&gt;::toXmlElement(const T& t, const std::string& tag)
+  <button type="button" sytle= "display:inline" onclick="showHide('id2');">+</button><div id="id2" style="">{
+    using SPtr = XmlConvert&lt;T&gt;::SPtr;
+    SPtr pElem = XmlProcessing::makeTaggedElement(tag);
+    SPtr pText = XmlProcessing::makeTextElement(Utilities::Convert&lt;T&gt;::toString(t));
+    pElem-&gt;addChild(pText);
+    return pElem;
+  </div>}
+
+  template&lt;typename T&gt;
+  T XmlConvert&lt;T&gt;::fromXmlElement(SPtr pElem)
+  <button type="button" sytle= "display:inline" onclick="showHide('id3');">+</button><div id="id3" style="">{
+    std::vector&lt;SPtr&gt; children = pElem-&gt;children();
+    if (children.size() == 0)
+      throw std::exception("text node does not exist");
+    SPtr pText = children[0];
+    std::string text = pText-&gt;value();
+    T t = Utilities::Convert&lt;T&gt;::fromString(text);
+    return t;
+  </div>}
+</div>}
+
+</PRE>
+</body>
+</html>

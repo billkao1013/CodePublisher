@@ -1,0 +1,290 @@
+<html>
+	<head>
+<link rel="stylesheet" type="text/css" href="style.css">
+<script type="text/javascript" src="jsuse.js"></script>	</head>
+<body>
+	<h4>TypeAnalysis.h</h4>
+<hr/><div class="indent">	
+	<h4>Dependencies</h4>
+	<a href="Utilities.h.html">Utilities.h</a>
+</div>	<hr/>
+<PRE>
+#pragma once
+///////////////////////////////////////////////////////////////
+// TypeAnalysis.h      //
+// ver 1.0                                                   //
+// SUID 611189677//
+// Name: Chie Chih Kao
+// email: ckao01@syr.edu
+// reference from Prof. Jim Fawcett
+// 
+//
+///////////////////////////////////////////////////////////////
+/*
+* Package Operations :
+*------------------ -
+* The Package is to build the typetable and use the token from the Denpendency package
+* to do the Depency analysis then use graph package to do the strong component search
+*
+* Required Files :
+*-------------- -
+* ActionsAndRules.h
+* DepAnal.h
+* Tokenizer.h
+* NoSqlDb.h
+* Display.h
+* Persist.h
+
+* function imnplement:
+* --------------
+*bool doDisplay(ASTNode* pNode) //display the AST
+*void TypeAnal::DFS(ASTNode* pNode) //do dfs search for the AST and build the typetable
+*void TypeAnal::doTypeAnal() //invoke the DFS to build the TypeTable
+*bool bool TypeAnal::saveValue(Key key, TypeData data) //save value in type table
+*void TypeAnal::show() <button type="button" sytle= "display:inline" onclick="showHide('id0');">+</button><div id="id0" style="">{ //display the type table
+*void TypeAnal::doDepAnal(string filedir) <button type="button" sytle= "display:inline" onclick="showHide('id1');">+</button><div id="id1" style="">{ //do denpendency ananlyze
+*TypeAnal::buildDepGraph(NoSqlDb&lt;StrData&gt; db) //Build Dependency graph
+
+*
+* Maintenance History:
+* --------------------
+*vserion 1.0 2017/3/13 Chien Chih Kao
+*
+*/
+
+
+#include "../Parser/ActionsAndRules.h"
+#include &lt;iostream&gt;
+#include &lt;functional&gt;
+#include "../DependencyAnanlysis/DepAnal.h"
+#include "../Tokenizer/Tokenizer.h"
+#include &lt;windows.h&gt;
+#include "../NoSqlDb/NoSqlDb.h"
+#include "../Display/Display.h"
+#include "../Persist/Persist.h"
+#include "../Graph/Graph.h"
+#include "../HtmlConverter/HtmlConverter.h"
+
+#pragma warning (disable : 4101)
+using namespace NoSQLDB;
+using namespace GraphLib;
+using StrData = std::string;
+typedef Graph&lt;std::string, std::string&gt; graph;
+typedef Vertex&lt;std::string, std::string&gt; vertex;
+typedef GraphLib::Display&lt;std::string, std::string&gt; display;
+
+
+namespace CodeAnalysis 
+<button type="button" sytle= "display:inline" onclick="showHide('id2');">+</button><div id="id2" style="">{
+	using namespace std;
+	using Key = string;
+	using Keys = vector&lt;Key&gt;;
+	class TypeData
+	<button type="button" sytle= "display:inline" onclick="showHide('id3');">+</button><div id="id3" style="">{
+	public:
+		TypeData():category(""),filename(""),filepath("") <button type="button" sytle= "display:inline" onclick="showHide('id4');">+</button><div id="id4" style="">{</div>}
+		string getcategory() <button type="button" sytle= "display:inline" onclick="showHide('id5');">+</button><div id="id5" style="">{ return category; </div>}
+		string getfilname() <button type="button" sytle= "display:inline" onclick="showHide('id6');">+</button><div id="id6" style="">{ return filename; </div>}
+		string getfilepath() <button type="button" sytle= "display:inline" onclick="showHide('id7');">+</button><div id="id7" style="">{ return filepath; </div>}
+		void set(string cat, string name, string path) <button type="button" sytle= "display:inline" onclick="showHide('id8');">+</button><div id="id8" style="">{
+			category = cat;
+			filename = name;
+			filepath = path;
+		</div>}
+	private:
+		string category;
+		string filename;
+		string filepath;
+	</div>};
+
+	class TypeAnal
+	<button type="button" sytle= "display:inline" onclick="showHide('id9');">+</button><div id="id9" style="">{
+	public:
+		using SPtr = std::shared_ptr&lt;ASTNode*&gt;;
+		TypeAnal();
+		void doTypeAnal();
+		void doDepAnal(string filedir);
+		bool saveValue(Key, TypeData);
+		TypeData value(Key key);
+		Keys keys();
+		void show();
+		void buildDepGraph(NoSqlDb&lt;StrData&gt; db);
+		bool hasKey(string key)
+		<button type="button" sytle= "display:inline" onclick="showHide('id10');">+</button><div id="id10" style="">{
+			if (TypeTable.find(key) == TypeTable.end())
+				return false;
+			return true;
+		</div>}
+		
+	private:
+		void DFS(ASTNode* pNode);
+		AbstrSynTree& ASTref_;
+		ScopeStack&lt;ASTNode*&gt; scopeStack_;
+		Scanner::Toker& toker_;
+		unordered_map &lt;Key, TypeData&gt; TypeTable;
+		using Item = std::pair&lt;Key, TypeData&gt;;
+	</div>};
+
+	inline TypeAnal::TypeAnal() :
+		ASTref_(Repository::getInstance()-&gt;AST()),
+		scopeStack_(Repository::getInstance()-&gt;scopeStack()),
+		toker_(*(Repository::getInstance()-&gt;Toker()))
+	<button type="button" sytle= "display:inline" onclick="showHide('id11');">+</button><div id="id11" style="">{
+		std::function&lt;void()&gt; test = [] <button type="button" sytle= "display:inline" onclick="showHide('id12');">+</button><div id="id12" style="">{ int x; </div>};  // This is here to test detection of lambdas.
+	</div>}                                              // It doesn't do anything useful for dep anal.
+
+	inline bool doDisplay(ASTNode* pNode) //display the AST
+	<button type="button" sytle= "display:inline" onclick="showHide('id13');">+</button><div id="id13" style="">{
+		static std::string toDisplay[] = <button type="button" sytle= "display:inline" onclick="showHide('id14');">+</button><div id="id14" style="">{
+			"function", "lambda", "class", "struct", "enum", "alias", "typedef"
+		</div>};
+		for (std::string type : toDisplay)
+		<button type="button" sytle= "display:inline" onclick="showHide('id15');">+</button><div id="id15" style="">{
+			if (pNode-&gt;type_ == type)
+				return true;
+		</div>}
+		return false;
+	</div>}
+	inline void TypeAnal::DFS(ASTNode* pNode) //do dfs search for the AST and build the typetable
+	<button type="button" sytle= "display:inline" onclick="showHide('id16');">+</button><div id="id16" style="">{
+		TypeData data;
+		static std::string path = "";
+		if (pNode-&gt;path_ != path)
+		<button type="button" sytle= "display:inline" onclick="showHide('id17');">+</button><div id="id17" style="">{
+			//std::cout &lt;&lt; "\n    -- " &lt;&lt; pNode-&gt;path_ &lt;&lt; "\\" &lt;&lt; pNode-&gt;package_;
+			path = pNode-&gt;path_;
+		</div>}
+		if (doDisplay(pNode)&&pNode-&gt;parentType_!="class"&&pNode-&gt;name_!="main"&&pNode-&gt;parentType_ == "namespace")
+		<button type="button" sytle= "display:inline" onclick="showHide('id18');">+</button><div id="id18" style="">{
+			//std::cout &lt;&lt; "\n  " &lt;&lt; pNode-&gt;name_;
+			//std::cout &lt;&lt; ", " &lt;&lt; pNode-&gt;type_ &lt;&lt; ", " &lt;&lt; pNode-&gt;parentType_;
+			data.set(pNode-&gt;type_, pNode-&gt;package_, pNode-&gt;path_);
+			if (!hasKey(pNode-&gt;name_))
+				saveValue(pNode-&gt;name_, data);
+			/*if (!saveValue(pNode-&gt;name_, data))
+				cout &lt;&lt; "duplicate key" &lt;&lt; endl;*/
+			//cout &lt;&lt; "\ncategory:" &lt;&lt; TypeTable[pNode-&gt;name_].category&lt;&lt;", filename"&lt;&lt; TypeTable[pNode-&gt;name_].filename;
+		</div>}
+		for (auto pChild : pNode-&gt;children_)
+			DFS(pChild);
+	</div>}
+
+	inline void TypeAnal::doTypeAnal() //invoke the DFS to build the TypeTable
+	<button type="button" sytle= "display:inline" onclick="showHide('id19');">+</button><div id="id19" style="">{
+		std::cout &lt;&lt; "\n  --Req#4 starting type analysis:\n";
+		std::cout &lt;&lt; "\n  scanning AST and Building the TypeTable:";
+		std::cout &lt;&lt; "\n -----------------------------------------------";
+		ASTNode* pRoot = ASTref_.root();
+		DFS(pRoot);
+	</div>}
+	inline bool TypeAnal::saveValue(Key key, TypeData data) <button type="button" sytle= "display:inline" onclick="showHide('id20');">+</button><div id="id20" style="">{ //save value in type table
+		if (TypeTable.find(key) != TypeTable.end())
+			return false;
+		TypeTable[key] = data;
+		return true;
+	</div>}
+	inline TypeData TypeAnal::value(Key key) //retrieve data in type table
+	<button type="button" sytle= "display:inline" onclick="showHide('id21');">+</button><div id="id21" style="">{
+		if (TypeTable.find(key) != TypeTable.end())
+			return TypeTable[key];
+		return TypeData();
+	</div>}
+	inline Keys TypeAnal::keys() <button type="button" sytle= "display:inline" onclick="showHide('id22');">+</button><div id="id22" style="">{ //get all the keys in the type table
+			Keys keys;
+			for (Item item : TypeTable)
+			<button type="button" sytle= "display:inline" onclick="showHide('id23');">+</button><div id="id23" style="">{
+				keys.push_back(item.first);
+			</div>}
+			return keys;
+	</div>}
+	inline void TypeAnal::show() <button type="button" sytle= "display:inline" onclick="showHide('id24');">+</button><div id="id24" style="">{ //display the type table
+		cout &lt;&lt;"\nShow The Type Table, Table size: "&lt;&lt; TypeTable.size()&lt;&lt;"\n";
+		//Key key = "putlines";
+		for (Key key : keys()) <button type="button" sytle= "display:inline" onclick="showHide('id25');">+</button><div id="id25" style="">{
+			//value(key);
+			std::ostringstream out;
+			out.setf(std::ios::adjustfield, std::ios::left);
+			out &lt;&lt; "\n    " &lt;&lt; std::setw(8) &lt;&lt; "typename" &lt;&lt; " : " &lt;&lt; key;
+			out &lt;&lt; "\n    " &lt;&lt; std::setw(8) &lt;&lt; "category" &lt;&lt; " : " &lt;&lt; value(key).getcategory();
+			out &lt;&lt; "\n    " &lt;&lt; std::setw(8) &lt;&lt; "File Name" &lt;&lt; " : " &lt;&lt; value(key).getfilname();
+			out &lt;&lt; "\n    " &lt;&lt; std::setw(8) &lt;&lt; "File Path" &lt;&lt; " : " &lt;&lt; value(key).getfilepath();
+			out &lt;&lt; "\n";
+			cout&lt;&lt;out.str();
+		</div>}
+	</div>}
+	void TypeAnal::doDepAnal(string filedir) <button type="button" sytle= "display:inline" onclick="showHide('id26');">+</button><div id="id26" style="">{ //do denpendency ananlyze
+		DepAnal dep(filedir+"\\");
+		dep.storeAlltoken();
+		//cout &lt;&lt; "\nSIZE: " &lt;&lt; dep.gettokenvec().size();
+		TypeData data;
+		NoSqlDb&lt;StrData&gt; db;
+		Element&lt;StrData&gt; childelem;
+		for (tokendata tok : dep.gettokenvec()) <button type="button" sytle= "display:inline" onclick="showHide('id27');">+</button><div id="id27" style="">{
+			//cout &lt;&lt; "\ntok :" &lt;&lt; tok.tok &lt;&lt; ", filename: " &lt;&lt; tok.filename;
+			data = value(tok.gettok());
+			if (hasKey(tok.gettok())&&tok.gettokfilenam() != data.getfilname()) <button type="button" sytle= "display:inline" onclick="showHide('id28');">+</button><div id="id28" style="">{
+				//cout &lt;&lt; "\n" &lt;&lt; tok.filename &lt;&lt; " depend on: " &lt;&lt; data.filename;
+				Element&lt;StrData&gt; elem;
+				if (!db.hasKey(data.getfilname())) <button type="button" sytle= "display:inline" onclick="showHide('id29');">+</button><div id="id29" style="">{//create element if not exit
+					elem.name = data.getfilname();
+					elem.data = data.getfilepath();
+					db.saveRecord(elem.name, elem);
+				</div>}
+				if (!db.hasKey(tok.gettokfilenam())) //create element if not exit
+				<button type="button" sytle= "display:inline" onclick="showHide('id30');">+</button><div id="id30" style="">{
+					elem.name = tok.gettokfilenam();
+					elem.data = tok.getfilepath()+tok.gettokfilenam();
+					db.saveRecord(elem.name, elem);
+				</div>}
+				elem = db.value(tok.gettokfilenam());
+				elem.saveChild(data.getfilname()); //add dependency
+				db.saveValue(elem.name,elem);
+			</div>}
+		</div>}
+		cout &lt;&lt; "\n--Req#5 Demostrate dependecy in No SQL DB\n";
+		/*Display&lt;std::string&gt; display(db);
+		display.showAll();*/
+		cout &lt;&lt; "\nDB size::"&lt;&lt;db.keys().size();
+		HtmlConverter convert;
+		for (Key key : db.keys()) <button type="button" sytle= "display:inline" onclick="showHide('id31');">+</button><div id="id31" style="">{
+			convert.toHtml(db.value(key).data,key,db.value(key).children);
+			std::cout &lt;&lt; "\n  " &lt;&lt; key &lt;&lt; ":"&lt;&lt; db.value(key).show();
+		</div>}
+			
+		Persist&lt;std::string&gt; persist(db);
+		Persist&lt;std::string&gt;::Xml xml = persist.save();
+		//Utilities::subTitle("Persisting test db to XML");
+		//std::cout &lt;&lt; "\n" &lt;&lt; xml &lt;&lt; "\n";
+		buildDepGraph(db);
+	</div>}
+	void TypeAnal::buildDepGraph(NoSqlDb&lt;StrData&gt; db) //Build Dependency graph
+	<button type="button" sytle= "display:inline" onclick="showHide('id32');">+</button><div id="id32" style="">{
+		cout &lt;&lt; "\n\n----Req#5#6 Build Depency Graph to Analyze Strong Component----\n";
+		graph g;
+		for (Key key : db.keys()) <button type="button" sytle= "display:inline" onclick="showHide('id33');">+</button><div id="id33" style="">{
+			if (!g.hasKey(key)) <button type="button" sytle= "display:inline" onclick="showHide('id34');">+</button><div id="id34" style="">{
+				vertex v(key, key);
+				g.addVertex(v);
+			</div>}
+			for (size_t i = 0; i &lt; db.value(key).children.getValue().size();i++) <button type="button" sytle= "display:inline" onclick="showHide('id35');">+</button><div id="id35" style="">{
+				string childkey = db.value(key).children.getValue()[i];
+				if (!g.hasKey(childkey)) <button type="button" sytle= "display:inline" onclick="showHide('id36');">+</button><div id="id36" style="">{
+					vertex childv(childkey, childkey);
+					g.addVertex(childv);
+				</div>}
+				g.addEdge(key + "-&gt;" + childkey, g.getVertexById(key),g.getVertexById(childkey));
+				//cout &lt;&lt; "\n" &lt;&lt; key + "-&gt;" + childkey &lt;&lt; endl;
+			</div>}	
+		</div>}
+		//display::show(g);
+		g.findSCC();
+		g.showSCC();
+		g.SCCtoXML();
+	</div>}
+</div>}
+
+
+
+</PRE>
+</body>
+</html>

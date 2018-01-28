@@ -1,0 +1,762 @@
+<html>
+	<head>
+<link rel="stylesheet" type="text/css" href="style.css">
+<script type="text/javascript" src="jsuse.js"></script>	</head>
+<body>
+	<h4>Tokenizer.cpp</h4>
+<hr/><div class="indent">	
+	<h4>Dependencies</h4>
+	<a href="Utilities.h.html">Utilities.h</a>
+</div>	<hr/>
+<PRE>
+/////////////////////////////////////////////////////////////////////
+// Tokenizer.cpp - read words from a std::stream                   //
+// ver 4.2                                                         //
+// Language:    C++, Visual Studio 2015                            //
+// Platform:    Dell XPS 8900, Windows 10                          //
+// Application: Parser component, CSE687 - Object Oriented Design  //
+// Author:      Jim Fawcett, Syracuse University, CST 4-187        //
+//              jfawcett@twcny.rr.com                              //
+/////////////////////////////////////////////////////////////////////
+
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+#include "Tokenizer.h"
+#include "..\Utilities\Utilities.h"
+
+namespace Scanner
+<button type="button" sytle= "display:inline" onclick="showHide('id0');">+</button><div id="id0" style="">{
+  ///////////////////////////////////////////////////////////////////
+  // Context is a shared data storage facility.
+  /*
+   * - with Context we don't need static members to share
+   *   state pointes etc.  Context holds and shares all that.
+   * - Context is an entirely private facility used by ConsumeState
+   *   and its derived instances, so there is no need for encapsulation
+   *   and we use a struct.  This won't be appropriate if we handed
+   *   the context to clients of Toker.
+   */
+  struct Context
+  <button type="button" sytle= "display:inline" onclick="showHide('id1');">+</button><div id="id1" style="">{
+    Context();
+    ~Context();
+    std::string token;
+    std::istream* _pIn;
+    std::vector&lt;std::string&gt; _oneCharTokens =
+    <button type="button" sytle= "display:inline" onclick="showHide('id2');">+</button><div id="id2" style="">{
+      "\n", "&lt;", "&gt;", "<button type="button" sytle= "display:inline" onclick="showHide('id3');">+</button><div id="id3" style="">{", "</div>}", "[", "]", "(", ")", ":", ";", " = ", " + ", " - ", "*", ".", ",", "@"
+    </div>};
+    std::vector&lt;std::string&gt; _twoCharTokens =
+    <button type="button" sytle= "display:inline" onclick="showHide('id4');">+</button><div id="id4" style="">{
+      "&lt;&lt;", "&gt;&gt;", "::", "++", "--", "==", "+=", "-=", "*=", "/="
+    </div>};
+    int prevChar;
+    int currChar;
+    bool _doReturnComments;
+    bool inCSharpString = false;
+    size_t _lineCount;
+    ConsumeState* _pState;
+    ConsumeState* _pEatCppComment;
+    ConsumeState* _pEatCComment;
+    ConsumeState* _pEatWhitespace;
+    ConsumeState* _pEatPunctuator;
+    ConsumeState* _pEatAlphanum;
+    ConsumeState* _pEatSpecialCharacters;
+    ConsumeState* _pEatDQString;
+    ConsumeState* _pEatSQString;
+    ConsumeState* _pEatRawCppString;
+    ConsumeState* _pEatRawCSharpString;
+  </div>};
+
+  ///////////////////////////////////////////////////////////////////
+  // private ConsumeState worker class
+  /*
+   *   Nota Bene:
+   *   - At exit the eatChars() member should return with
+   *     currChar set to the first non-state character.
+   *   - Each derived class must insure that this condition
+   *     is meet.
+   */
+  class ConsumeState
+  <button type="button" sytle= "display:inline" onclick="showHide('id5');">+</button><div id="id5" style="">{
+    friend class Toker;
+  public:
+    using Token = std::string;
+    ConsumeState();
+    ConsumeState(const ConsumeState&) = delete;
+    ConsumeState& operator=(const ConsumeState&) = delete;
+    virtual ~ConsumeState();
+    void attach(std::istream* pIn);
+    virtual void eatChars() = 0;
+    void consumeChars() <button type="button" sytle= "display:inline" onclick="showHide('id6');">+</button><div id="id6" style="">{
+      _pContext-&gt;_pState-&gt;eatChars();
+      _pContext-&gt;_pState = nextState();
+    </div>}
+    bool canRead() <button type="button" sytle= "display:inline" onclick="showHide('id7');">+</button><div id="id7" style="">{ return _pContext-&gt;_pIn-&gt;good(); </div>}
+    std::string getTok() <button type="button" sytle= "display:inline" onclick="showHide('id8');">+</button><div id="id8" style="">{ return _pContext-&gt;token; </div>}
+    bool hasTok() <button type="button" sytle= "display:inline" onclick="showHide('id9');">+</button><div id="id9" style="">{ return _pContext-&gt;token.size() &gt; 0; </div>}
+    ConsumeState* nextState();
+    void returnComments(bool doReturnComments = false);
+    size_t currentLineCount();
+    void setSpecialTokens(const std::string& commaSeparatedString);
+    void setContext(Context* pContext);
+  protected:
+    Context* _pContext;
+    bool collectChar();
+    bool isOneCharToken(Token tok);
+    bool isTwoCharToken(Token tok);
+    Token makeString(int ch);
+  </div>};
+</div>}
+
+using namespace Scanner;
+using Token = std::string;
+
+//----&lt; used by Toker to provide Consumer with Context ptr &gt;---------
+
+void ConsumeState::setContext(Context* pContext)
+<button type="button" sytle= "display:inline" onclick="showHide('id10');">+</button><div id="id10" style="">{
+  _pContext = pContext;
+</div>}
+//----&lt; attach or re-attach to input stream &gt;------------------------
+
+void ConsumeState::attach(std::istream* pIn)
+<button type="button" sytle= "display:inline" onclick="showHide('id11');">+</button><div id="id11" style="">{
+  _pContext-&gt;_pState = _pContext-&gt;_pEatWhitespace;
+  _pContext-&gt;_lineCount = 0;
+  _pContext-&gt;_pIn = pIn;
+</div>}
+//----&lt; replace one and two char tokens &gt;----------------------------
+
+void ConsumeState::setSpecialTokens(const std::string& commaSeparatedTokens)
+<button type="button" sytle= "display:inline" onclick="showHide('id12');">+</button><div id="id12" style="">{
+  std::vector&lt;Token&gt; result = Utilities::StringHelper::split(commaSeparatedTokens);
+  _pContext-&gt;_oneCharTokens.clear();
+  _pContext-&gt;_twoCharTokens.clear();
+  for (std::string item : result)
+  <button type="button" sytle= "display:inline" onclick="showHide('id13');">+</button><div id="id13" style="">{
+    if (item.size() == 1 || item == "\n")
+      _pContext-&gt;_oneCharTokens.push_back(item);
+    if (item.size() &gt;= 2)
+      _pContext-&gt;_twoCharTokens.push_back(item);
+  </div>}
+</div>}
+//----&lt; return number of newlines collected from stream &gt;------------
+
+size_t ConsumeState::currentLineCount() <button type="button" sytle= "display:inline" onclick="showHide('id14');">+</button><div id="id14" style="">{ return _pContext-&gt;_lineCount; </div>}
+
+//----&lt; collect character from stream &gt;------------------------------
+
+bool ConsumeState::collectChar()
+<button type="button" sytle= "display:inline" onclick="showHide('id15');">+</button><div id="id15" style="">{
+  if (_pContext-&gt;_pIn-&gt;good())
+  <button type="button" sytle= "display:inline" onclick="showHide('id16');">+</button><div id="id16" style="">{
+    _pContext-&gt;prevChar = _pContext-&gt;currChar;
+    _pContext-&gt;currChar = _pContext-&gt;_pIn-&gt;get();
+    if (_pContext-&gt;currChar == '\n')
+      ++(_pContext-&gt;_lineCount);
+    return true;
+  </div>}
+  return false;
+</div>}
+
+//----&lt; logs to console if TEST_LOG is defined &gt;---------------------
+
+void testLog(const std::string& msg);  // forward declaration
+
+//----&lt; turn on\off returning comments as tokens &gt;-------------------
+
+void ConsumeState::returnComments(bool doReturnComments)
+<button type="button" sytle= "display:inline" onclick="showHide('id17');">+</button><div id="id17" style="">{
+  _pContext-&gt;_doReturnComments = doReturnComments;
+</div>}
+//----&lt; is tok one of the special one character tokens? &gt;------------
+
+bool ConsumeState::isOneCharToken(Token tok)
+<button type="button" sytle= "display:inline" onclick="showHide('id18');">+</button><div id="id18" style="">{
+  for (size_t i = 0; i &lt; _pContext-&gt;_oneCharTokens.size(); ++i)
+    if (_pContext-&gt;_oneCharTokens[i] == tok)
+      return true;
+  return false;
+</div>}
+//----&lt; is tok one of the special two character tokens? &gt;------------
+
+bool ConsumeState::isTwoCharToken(Token tok)
+<button type="button" sytle= "display:inline" onclick="showHide('id19');">+</button><div id="id19" style="">{
+  for (size_t i = 0; i &lt; _pContext-&gt;_twoCharTokens.size(); ++i)
+    if (_pContext-&gt;_twoCharTokens[i] == tok)
+      return true;
+  return false;
+</div>}
+//----&lt; make a string with this one integer &gt;------------------------
+
+ConsumeState::Token ConsumeState::makeString(int ch)
+<button type="button" sytle= "display:inline" onclick="showHide('id20');">+</button><div id="id20" style="">{
+  Token temp;
+  return temp += ch;
+</div>}
+//----&lt; decide which state to use next &gt;-----------------------------
+
+ConsumeState* ConsumeState::nextState()
+<button type="button" sytle= "display:inline" onclick="showHide('id21');">+</button><div id="id21" style="">{
+  std::locale loc;
+
+  if (!(_pContext-&gt;_pIn-&gt;good()))
+  <button type="button" sytle= "display:inline" onclick="showHide('id22');">+</button><div id="id22" style="">{
+    return nullptr;
+  </div>}
+  int chNext = _pContext-&gt;_pIn-&gt;peek();
+  if (chNext == EOF)
+  <button type="button" sytle= "display:inline" onclick="showHide('id23');">+</button><div id="id23" style="">{
+    _pContext-&gt;_pIn-&gt;clear();
+    // if peek() reads end of file character, EOF, then eofbit is set and
+    // _pIn-&gt;good() will return false.  clear() restores state to good
+  </div>}
+  //---------------------------------------------------------
+  // The following tests must come first
+
+  if (_pContext-&gt;currChar == '\"' && _pContext-&gt;prevChar != '\\')
+  <button type="button" sytle= "display:inline" onclick="showHide('id24');">+</button><div id="id24" style="">{
+    testLog("state: eatDQString");
+    return _pContext-&gt;_pEatDQString;
+  </div>}
+  if (_pContext-&gt;currChar == '\'' && _pContext-&gt;prevChar != '\\')
+  <button type="button" sytle= "display:inline" onclick="showHide('id25');">+</button><div id="id25" style="">{
+    testLog("state: eatSQString");
+    return _pContext-&gt;_pEatSQString;
+  </div>}
+  if (_pContext-&gt;currChar == '/' && chNext == '/')
+  <button type="button" sytle= "display:inline" onclick="showHide('id26');">+</button><div id="id26" style="">{
+    testLog("state: eatCppComment");
+    return _pContext-&gt;_pEatCppComment;
+  </div>}
+  if (_pContext-&gt;currChar == '/' && chNext == '*')
+  <button type="button" sytle= "display:inline" onclick="showHide('id27');">+</button><div id="id27" style="">{
+    testLog("state: eatCComment");
+    return _pContext-&gt;_pEatCComment;
+  </div>}
+  if (_pContext-&gt;currChar == 'R' && chNext == '\"')
+  <button type="button" sytle= "display:inline" onclick="showHide('id28');">+</button><div id="id28" style="">{
+    testLog("state: eatRawCppString");
+    return _pContext-&gt;_pEatRawCppString;
+  </div>}
+  if (_pContext-&gt;currChar == '@' && chNext == '\"')
+  <button type="button" sytle= "display:inline" onclick="showHide('id29');">+</button><div id="id29" style="">{
+    testLog("state: eatRawCSharpString");
+    return _pContext-&gt;_pEatRawCSharpString;
+  </div>}
+  //---------------------------------------------------------
+  // The following tests must come after those above
+
+  if (isOneCharToken(makeString(_pContext-&gt;currChar)))
+  <button type="button" sytle= "display:inline" onclick="showHide('id30');">+</button><div id="id30" style="">{
+    testLog("state: eatSpecialCharacters");
+    return _pContext-&gt;_pEatSpecialCharacters;
+  </div>}
+  if (std::isspace(_pContext-&gt;currChar, loc) && _pContext-&gt;currChar != '\n')
+  <button type="button" sytle= "display:inline" onclick="showHide('id31');">+</button><div id="id31" style="">{
+    testLog("state: eatWhitespace");
+    return _pContext-&gt;_pEatWhitespace;
+  </div>}
+  if (std::isalnum(_pContext-&gt;currChar, loc) || _pContext-&gt;currChar == '_')
+  <button type="button" sytle= "display:inline" onclick="showHide('id32');">+</button><div id="id32" style="">{
+    testLog("state: eatAlphanum");
+    return _pContext-&gt;_pEatAlphanum;
+  </div>}
+  if (ispunct(_pContext-&gt;currChar))
+  <button type="button" sytle= "display:inline" onclick="showHide('id33');">+</button><div id="id33" style="">{
+    testLog("state: eatPunctuator");
+    return _pContext-&gt;_pEatPunctuator;
+  </div>}
+  if (!_pContext-&gt;_pIn-&gt;good())
+  <button type="button" sytle= "display:inline" onclick="showHide('id34');">+</button><div id="id34" style="">{
+    testLog("state: eatWhitespace");
+    return _pContext-&gt;_pEatWhitespace;
+  </div>}
+  //---------------------------------------------------------
+  // If _pContext-&gt;currChar is not a state transition char
+  // then we go to eatPuctuator state
+
+  return _pContext-&gt;_pEatPunctuator;
+</div>}
+//----&lt; class that consumes whitespace &gt;-----------------------------
+
+class EatWhitespace : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id35');">+</button><div id="id35" style="">{
+public:
+  EatWhitespace(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id36');">+</button><div id="id36" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id37');">+</button><div id="id37" style="">{
+    std::locale loc;
+    _pContext-&gt;token.clear();
+    do <button type="button" sytle= "display:inline" onclick="showHide('id38');">+</button><div id="id38" style="">{
+      if (!collectChar())
+        return;
+    </div>} while (std::isspace(_pContext-&gt;currChar, loc) && _pContext-&gt;currChar != '\n');
+  </div>}
+</div>};
+//----&lt; class that consumes C++ comment &gt;----------------------------
+
+class EatCppComment : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id39');">+</button><div id="id39" style="">{
+public:
+  EatCppComment(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id40');">+</button><div id="id40" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id41');">+</button><div id="id41" style="">{
+    _pContext-&gt;token.clear();
+    do <button type="button" sytle= "display:inline" onclick="showHide('id42');">+</button><div id="id42" style="">{
+      if (_pContext-&gt;_doReturnComments)
+        _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!collectChar())
+        return;
+    </div>} while (_pContext-&gt;currChar != '\n');
+  </div>}
+</div>};
+//----&lt; class that consumes C comment &gt;------------------------------
+
+class EatCComment : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id43');">+</button><div id="id43" style="">{
+public:
+  EatCComment(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id44');">+</button><div id="id44" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id45');">+</button><div id="id45" style="">{
+    _pContext-&gt;token.clear();
+    do <button type="button" sytle= "display:inline" onclick="showHide('id46');">+</button><div id="id46" style="">{
+      if (_pContext-&gt;_doReturnComments)
+        _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!collectChar())
+        return;
+    </div>} while (_pContext-&gt;currChar != '*' || _pContext-&gt;_pIn-&gt;peek() != '/');
+    if (_pContext-&gt;_doReturnComments)
+      _pContext-&gt;token += _pContext-&gt;currChar;
+    if (!collectChar())      // get terminating '/'
+      return;
+    if (_pContext-&gt;_doReturnComments)
+      _pContext-&gt;token += _pContext-&gt;currChar;
+    collectChar();           // get first non-comment char
+  </div>}
+</div>};
+//----&lt; class that eats punctuators &gt;--------------------------------
+
+class EatPunctuator : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id47');">+</button><div id="id47" style="">{
+public:
+  EatPunctuator(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id48');">+</button><div id="id48" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id49');">+</button><div id="id49" style="">{
+    _pContext-&gt;token.clear();
+    int chNext = _pContext-&gt;_pIn-&gt;peek();
+    do <button type="button" sytle= "display:inline" onclick="showHide('id50');">+</button><div id="id50" style="">{
+      if (_pContext-&gt;currChar == '\"' && _pContext-&gt;prevChar != '\\')    // start of double quoted string
+      <button type="button" sytle= "display:inline" onclick="showHide('id51');">+</button><div id="id51" style="">{
+        return;
+      </div>}
+      if (_pContext-&gt;currChar == '@' && chNext == '\"')    // start of raw C# double quoted string
+      <button type="button" sytle= "display:inline" onclick="showHide('id52');">+</button><div id="id52" style="">{
+        return;
+      </div>}
+      if (_pContext-&gt;currChar == '\'' && _pContext-&gt;prevChar != '\\')    // start of single quoted string
+      <button type="button" sytle= "display:inline" onclick="showHide('id53');">+</button><div id="id53" style="">{
+        return;
+      </div>}
+      Token temp = makeString(_pContext-&gt;currChar);
+      if (isOneCharToken(temp))
+      <button type="button" sytle= "display:inline" onclick="showHide('id54');">+</button><div id="id54" style="">{
+        return;
+      </div>}
+      _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!_pContext-&gt;_pIn-&gt;good())  // end of stream
+      <button type="button" sytle= "display:inline" onclick="showHide('id55');">+</button><div id="id55" style="">{
+        return;
+      </div>}
+      if (!collectChar())
+        return;
+    </div>} while (ispunct(_pContext-&gt;currChar));
+  </div>}
+</div>};
+//----&lt; class that eats alphanumeric characters &gt;--------------------
+/*
+ * treats underscore '_' as alphanumeric character
+ */
+class EatAlphanum : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id56');">+</button><div id="id56" style="">{
+public:
+  EatAlphanum(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id57');">+</button><div id="id57" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id58');">+</button><div id="id58" style="">{
+    _pContext-&gt;token.clear();
+    int chNext = _pContext-&gt;_pIn-&gt;peek();
+    do <button type="button" sytle= "display:inline" onclick="showHide('id59');">+</button><div id="id59" style="">{
+      _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!collectChar())
+        return;
+    </div>} while (isalnum(_pContext-&gt;currChar) || _pContext-&gt;currChar == '_');
+  </div>}
+</div>};
+//----&lt; class that eats one and two character tokens &gt;---------------
+
+class EatSpecialCharacters : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id60');">+</button><div id="id60" style="">{
+public:
+  EatSpecialCharacters(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id61');">+</button><div id="id61" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id62');">+</button><div id="id62" style="">{
+    _pContext-&gt;token.clear();
+    _pContext-&gt;token += _pContext-&gt;currChar;
+    Token temp = makeString(_pContext-&gt;currChar) += _pContext-&gt;_pIn-&gt;peek();
+    if (isTwoCharToken(temp))
+    <button type="button" sytle= "display:inline" onclick="showHide('id63');">+</button><div id="id63" style="">{
+      collectChar();
+      _pContext-&gt;token += _pContext-&gt;currChar;
+    </div>}
+    collectChar();
+  </div>}
+</div>};
+//----&lt; class that eats double quoted string &gt;-----------------------
+
+bool isEscapted(std::string tok)
+<button type="button" sytle= "display:inline" onclick="showHide('id64');">+</button><div id="id64" style="">{
+  size_t backSlashCount = 0;
+  for (size_t i = tok.size() - 1; i &gt;= 0; --i)
+  <button type="button" sytle= "display:inline" onclick="showHide('id65');">+</button><div id="id65" style="">{
+    if (tok[i] == '\\')
+      ++backSlashCount;
+    else break;
+  </div>}
+  return (backSlashCount % 2 == 1);
+</div>}
+//----&lt; class that eats double quoted string &gt;-----------------------
+
+class EatDQString : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id66');">+</button><div id="id66" style="">{
+public:
+  EatDQString(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id67');">+</button><div id="id67" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id68');">+</button><div id="id68" style="">{
+    _pContext-&gt;token.clear();
+    do
+    <button type="button" sytle= "display:inline" onclick="showHide('id69');">+</button><div id="id69" style="">{
+      _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!collectChar())
+        return;
+    </div>} while (_pContext-&gt;currChar != '\"' || isEscapted(_pContext-&gt;token));
+    _pContext-&gt;token += _pContext-&gt;currChar;
+    _pContext-&gt;inCSharpString = false;
+    collectChar();
+  </div>}
+</div>};
+//----&lt; class that eats double quoted string &gt;-----------------------
+
+class EatRawCppString : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id70');">+</button><div id="id70" style="">{
+public:
+  EatRawCppString(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id71');">+</button><div id="id71" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id72');">+</button><div id="id72" style="">{
+    _pContext-&gt;token.clear();
+    do
+    <button type="button" sytle= "display:inline" onclick="showHide('id73');">+</button><div id="id73" style="">{
+      _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!collectChar())
+        return;
+    </div>} while (_pContext-&gt;currChar != '\"' || _pContext-&gt;prevChar == 'R');
+    _pContext-&gt;token += _pContext-&gt;currChar;
+    collectChar();
+  </div>}
+</div>};
+//----&lt; class that eats double quoted string &gt;-----------------------
+
+class EatRawCSharpString : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id74');">+</button><div id="id74" style="">{
+public:
+  EatRawCSharpString(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id75');">+</button><div id="id75" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id76');">+</button><div id="id76" style="">{
+    _pContext-&gt;token.clear();
+    do
+    <button type="button" sytle= "display:inline" onclick="showHide('id77');">+</button><div id="id77" style="">{
+      _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!collectChar())
+        return;
+    </div>} while (_pContext-&gt;currChar != '\"' || _pContext-&gt;prevChar == '@');
+    _pContext-&gt;token += _pContext-&gt;currChar;
+    collectChar();
+  </div>}
+</div>};
+//----&lt; class that eats single quoted string &gt;-----------------------
+
+class EatSQString : public ConsumeState
+<button type="button" sytle= "display:inline" onclick="showHide('id78');">+</button><div id="id78" style="">{
+public:
+  EatSQString(Context* pContext)
+  <button type="button" sytle= "display:inline" onclick="showHide('id79');">+</button><div id="id79" style="">{
+    _pContext = pContext;
+  </div>}
+  virtual void eatChars()
+  <button type="button" sytle= "display:inline" onclick="showHide('id80');">+</button><div id="id80" style="">{
+    _pContext-&gt;token.clear();
+    do
+    <button type="button" sytle= "display:inline" onclick="showHide('id81');">+</button><div id="id81" style="">{
+      _pContext-&gt;token += _pContext-&gt;currChar;
+      if (!collectChar())
+        return;
+    </div>} while (_pContext-&gt;currChar != '\'' || isEscapted(_pContext-&gt;token));
+    _pContext-&gt;token += _pContext-&gt;currChar;
+    collectChar();
+  </div>}
+</div>};
+//----&lt; construct shared data storage &gt;------------------------------
+
+Context::Context()
+<button type="button" sytle= "display:inline" onclick="showHide('id82');">+</button><div id="id82" style="">{
+  _pEatAlphanum = new EatAlphanum(this);
+  _pEatCComment = new EatCComment(this);
+  _pEatCppComment = new EatCppComment(this);
+  _pEatPunctuator = new EatPunctuator(this);
+  _pEatWhitespace = new EatWhitespace(this);
+  _pEatSpecialCharacters = new EatSpecialCharacters(this);
+  _pEatDQString = new EatDQString(this);
+  _pEatRawCppString = new EatRawCppString(this);
+  _pEatRawCSharpString = new EatRawCSharpString(this);
+  _pEatSQString = new EatSQString(this);
+  _pState = _pEatWhitespace;
+  _lineCount = 0;
+  _doReturnComments = false;
+</div>}
+//----&lt; return shared resources &gt;------------------------------------
+
+Context::~Context()
+<button type="button" sytle= "display:inline" onclick="showHide('id83');">+</button><div id="id83" style="">{
+  delete _pEatAlphanum;
+  delete _pEatCComment;
+  delete _pEatCppComment;
+  delete _pEatPunctuator;
+  delete _pEatWhitespace;
+  delete _pEatSpecialCharacters;
+  delete _pEatDQString;
+  delete _pEatRawCppString;
+  delete _pEatRawCSharpString;
+  delete _pEatSQString;
+</div>}
+//----&lt; no longer has anything to do - will be removed &gt;-------------
+
+ConsumeState::ConsumeState() <button type="button" sytle= "display:inline" onclick="showHide('id84');">+</button><div id="id84" style="">{</div>}
+
+//----&lt; no longer has anything to do - will be removed &gt;-------------
+
+ConsumeState::~ConsumeState() <button type="button" sytle= "display:inline" onclick="showHide('id85');">+</button><div id="id85" style="">{</div>}
+
+//----&lt; construct toker starting in state EatWhitespace &gt;------------
+
+Toker::Toker()
+<button type="button" sytle= "display:inline" onclick="showHide('id86');">+</button><div id="id86" style="">{
+  _pContext = new Context();
+  pConsumer = _pContext-&gt;_pEatWhitespace;
+  pConsumer-&gt;setContext(_pContext);
+</div>}
+
+//----&lt; destructor deletes the current state &gt;-----------------------
+/*
+ * deleting any state deletes them all since derived destructor
+ * implicitly invokes the base destructor
+ */
+Toker::~Toker() 
+<button type="button" sytle= "display:inline" onclick="showHide('id87');">+</button><div id="id87" style="">{
+  delete _pContext;
+  _pContext = nullptr;
+</div>}
+
+//----&lt; attach tokenizer to stream &gt;---------------------------------
+/*
+ * stream can be either a std::fstream or std::stringstream
+ */
+bool Toker::attach(std::istream* pIn)
+<button type="button" sytle= "display:inline" onclick="showHide('id88');">+</button><div id="id88" style="">{
+  if (pIn != nullptr && pIn-&gt;good())
+  <button type="button" sytle= "display:inline" onclick="showHide('id89');">+</button><div id="id89" style="">{
+    pConsumer-&gt;attach(pIn);
+    //_pContext-&gt;_pIn = pIn;
+    return true;
+  </div>}
+  return false;
+</div>}
+//----&lt; collect token generated by ConsumeState &gt;--------------------
+
+std::string Toker::getTok()
+<button type="button" sytle= "display:inline" onclick="showHide('id90');">+</button><div id="id90" style="">{
+  while(true) 
+  <button type="button" sytle= "display:inline" onclick="showHide('id91');">+</button><div id="id91" style="">{
+    if (!pConsumer-&gt;canRead())
+      return "";
+    pConsumer-&gt;consumeChars();
+    if (pConsumer-&gt;hasTok())
+      break;
+  </div>}
+  return pConsumer-&gt;getTok();
+</div>}
+//----&lt; has toker reached the end of its stream? &gt;-------------------
+
+bool Toker::canRead() <button type="button" sytle= "display:inline" onclick="showHide('id92');">+</button><div id="id92" style="">{ return pConsumer-&gt;canRead(); </div>}
+
+//----&lt; start/stop returning comments as tokens &gt;--------------------
+
+void Toker::returnComments(bool doReturnComments)
+<button type="button" sytle= "display:inline" onclick="showHide('id93');">+</button><div id="id93" style="">{
+  pConsumer-&gt;returnComments(doReturnComments);
+</div>}
+//----&lt; is this token a comment? &gt;-----------------------------------
+
+bool Toker::isComment(const std::string& tok)
+<button type="button" sytle= "display:inline" onclick="showHide('id94');">+</button><div id="id94" style="">{
+  if (tok.find("//") &lt; tok.size() || tok.find("/*") &lt; tok.size())
+    return true;
+  return false;
+</div>}
+//----&lt; return number of newlines pulled from stream &gt;---------------
+
+size_t Toker::currentLineCount()
+<button type="button" sytle= "display:inline" onclick="showHide('id95');">+</button><div id="id95" style="">{
+  return pConsumer-&gt;currentLineCount();
+</div>}
+//----&lt; set one and two char tokens &gt;--------------------------------
+
+void Toker::setSpecialTokens(const std::string& commaSeparatedTokens)
+<button type="button" sytle= "display:inline" onclick="showHide('id96');">+</button><div id="id96" style="">{
+  pConsumer-&gt;setSpecialTokens(commaSeparatedTokens);
+</div>}
+//----&lt; debugging output to console if TEST_LOG is #defined &gt;--------
+
+void testLog(const std::string& msg)
+<button type="button" sytle= "display:inline" onclick="showHide('id97');">+</button><div id="id97" style="">{
+#ifdef TEST_LOG
+  std::cout &lt;&lt; "\n  " &lt;&lt; msg;
+#endif
+</div>}
+
+//----&lt; test stub &gt;--------------------------------------------------
+
+using Helper = Utilities::StringHelper;
+using namespace Utilities;
+
+#ifdef TEST_TOKENIZER
+
+#include &lt;fstream&gt;
+#include &lt;exception&gt;
+
+
+int main()
+<button type="button" sytle= "display:inline" onclick="showHide('id98');">+</button><div id="id98" style="">{
+  Helper::Title("Testing Tokenizer");
+
+  //std::string fileSpec = "../Tokenizer/Tokenizer.cpp";
+  //std::string fileSpec = "../Tokenizer/Tokenizer.h";
+  //std::string fileSpec = "../Tokenizer/Test.txt";
+  //std::string fileSpec = "../SemiExp/SemiExp.h";
+  std::string fileSpec = "../TestFiles/Test1.h";
+  try
+  <button type="button" sytle= "display:inline" onclick="showHide('id99');">+</button><div id="id99" style="">{
+    std::ifstream in(fileSpec);
+    if (!in.good())
+    <button type="button" sytle= "display:inline" onclick="showHide('id100');">+</button><div id="id100" style="">{
+      std::cout &lt;&lt; "\n  can't open " &lt;&lt; fileSpec &lt;&lt; "\n\n";
+      return 1;
+    </div>}
+
+    <button type="button" sytle= "display:inline" onclick="showHide('id101');">+</button><div id="id101" style="">{
+      Toker toker;
+      toker.returnComments();
+      toker.attach(&in);
+      std::cout &lt;&lt; "\n  current line count = " &lt;&lt; toker.currentLineCount();
+      do
+      <button type="button" sytle= "display:inline" onclick="showHide('id102');">+</button><div id="id102" style="">{
+        std::string tok = toker.getTok();
+        if (tok == "\n")
+          tok = "newline";
+        std::cout &lt;&lt; "\n -- " &lt;&lt; tok;
+      </div>} while (in.good());
+      std::cout &lt;&lt; "\n  current line count = " &lt;&lt; toker.currentLineCount();
+    </div>}
+ /*
+    putline();
+    Helper::title("Testing change of special characters");
+    std::string newSpecialChars = "., :, +, +=, \n <button type="button" sytle= "display:inline" onclick="showHide('id103');">+</button><div id="id103" style="">{ </div>}";
+
+    Toker toker;
+    toker.returnComments();
+    toker.setSpecialTokens(newSpecialChars);
+    in.clear();
+
+    in.seekg(std::ios::beg);
+    toker.attach(&in);
+    std::cout &lt;&lt; "\n  new special tokens: " &lt;&lt; newSpecialChars;
+    do
+    <button type="button" sytle= "display:inline" onclick="showHide('id104');">+</button><div id="id104" style="">{
+      std::string tok = toker.getTok();
+      if (tok == "\n")
+        tok = "newline";
+      std::cout &lt;&lt; "\n -- " &lt;&lt; tok;
+    </div>} while (in.good());
+    std::cout &lt;&lt; "\n  current line count = " &lt;&lt; toker.currentLineCount() &lt;&lt; "\n";
+
+    //Helper::title("Testing re-attach:");
+    //std::string path = "../Tokenizer/Tokenizer.h";
+    //std::ifstream inAgain(path);
+    //if (inAgain.good())
+    //<button type="button" sytle= "display:inline" onclick="showHide('id105');">+</button><div id="id105" style="">{
+    //  toker.attach(&inAgain);
+    //  do
+    //  <button type="button" sytle= "display:inline" onclick="showHide('id106');">+</button><div id="id106" style="">{
+    //    std::string tok = toker.getTok();
+    //    if (tok == "\n")
+    //      tok = "newline";
+    //    std::cout &lt;&lt; "\n -- " &lt;&lt; tok;
+    //  </div>} while (inAgain.good());
+    //  std::cout &lt;&lt; "\n  current line count = " &lt;&lt; toker.currentLineCount();
+    //</div>}
+    //else
+    //<button type="button" sytle= "display:inline" onclick="showHide('id107');">+</button><div id="id107" style="">{
+    //  std::cout &lt;&lt; "\n  can't attach to " &lt;&lt; path &lt;&lt; "\n";
+    //</div>}*/
+  </div>}
+  catch (std::logic_error& ex)
+  <button type="button" sytle= "display:inline" onclick="showHide('id108');">+</button><div id="id108" style="">{
+    std::cout &lt;&lt; "\n  " &lt;&lt; ex.what();
+  </div>}
+  std::cout &lt;&lt; "\n\n";
+  system("Pause");
+  return 0;
+</div>}
+#endif
+
+</PRE>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<html>
+	<head>
+<link rel="stylesheet" type="text/css" href="style.css">
+<script type="text/javascript" src="jsuse.js"></script>	</head>
+<body>
+	<h4>XmlUtilities.cpp</h4>
+<hr/><div class="indent">	
+	<h4>Dependencies</h4>
+	<a href="Utilities.h.html">Utilities.h</a>
+</div>	<hr/>
+<PRE>
+/////////////////////////////////////////////////////////////////////////
+// XmlUtilities.cpp - Utility class to convert template types to XML   //
+// ver 1.1                                                             //
+// Jim Fawcett, CSE687 - Object Oriented Design, Spring 2017           //
+/////////////////////////////////////////////////////////////////////////
+
+#include "XmlUtilities.h"
+#include "../CppProperties/CppProperties.h"
+#include &lt;iostream&gt;
+
+using namespace XmlProcessing;
+
+class Widget
+<button type="button" sytle= "display:inline" onclick="showHide('id0');">+</button><div id="id0" style="">{
+public:
+  using SPtr = std::shared_ptr&lt;Widget&gt;;
+
+  Property&lt;std::string&gt; name;
+  Property&lt;double&gt; pi;
+</div>};
+
+template&lt;&gt;
+typename XmlConvert&lt;Widget&gt;::SPtr XmlConvert&lt;Widget&gt;::toXmlElement(const Widget& w, const std::string& tag)
+<button type="button" sytle= "display:inline" onclick="showHide('id1');">+</button><div id="id1" style="">{
+  using SPtr = XmlConvert&lt;Widget&gt;::SPtr;
+  SPtr pElem = makeTaggedElement("widget");
+  SPtr pName = makeTaggedElement("name");
+  SPtr pText = makeTextElement(static_cast&lt;const std::string&gt;((w.name)));
+  pName-&gt;addChild(pText);
+  SPtr pPi = makeTaggedElement("pi");
+  pText = makeTextElement(Utilities::Convert&lt;double&gt;::toString(w.pi));
+  pPi-&gt;addChild(pText);
+  pElem-&gt;addChild(pName);
+  pElem-&gt;addChild(pPi);
+  return pElem;
+</div>}
+
+template&lt;&gt;
+typename Widget XmlConvert&lt;Widget&gt;::fromXmlElement(SPtr pElem)
+<button type="button" sytle= "display:inline" onclick="showHide('id2');">+</button><div id="id2" style="">{
+  std::vector&lt;SPtr&gt; children = pElem-&gt;children();
+  if (children.size() == 0)
+    throw std::exception("malformed Widget");
+  SPtr pName = children[0];
+  SPtr pText = pName-&gt;children()[0];
+  std::string text = pText-&gt;value();
+  Widget temp;
+  temp.name = text;
+  SPtr pPi = children[1];
+  pText = pPi-&gt;children()[0];
+  text = pText-&gt;value();
+  temp.pi = Utilities::Convert&lt;double&gt;::fromString(text);
+  return temp;
+</div>}
+
+using SPtr = XmlConvert&lt;std::string&gt;::SPtr;
+
+int main()
+<button type="button" sytle= "display:inline" onclick="showHide('id3');">+</button><div id="id3" style="">{
+  Utilities::Title("Testing XmlConvert&lt;T&gt;");
+
+  SPtr pElem = XmlConvert&lt;std::string&gt;::toXmlElement("a string body", "str");
+  std::cout &lt;&lt; "\n  " &lt;&lt; pElem-&gt;toString() &lt;&lt; "\n";
+
+  std::string newStr = XmlConvert&lt;std::string&gt;::fromXmlElement(pElem);
+  std::cout &lt;&lt; "\n  value of new string = \"" &lt;&lt; newStr &lt;&lt; "\"";
+
+  pElem = XmlConvert&lt;double&gt;::toXmlElement(3.1415927, "dbl");
+  std::cout &lt;&lt; "\n  " &lt;&lt; pElem-&gt;toString() &lt;&lt; "\n";
+
+  double pi = XmlConvert&lt;double&gt;::fromXmlElement(pElem);
+  std::cout &lt;&lt; "\n  value of new double = " &lt;&lt; pi;
+
+  Widget widget;
+  widget.name = "aWidget";
+  widget.pi = 3.1415927;
+  pElem = XmlConvert&lt;Widget&gt;::toXmlElement(widget, "widget");
+  std::cout &lt;&lt; "\n  " &lt;&lt; pElem-&gt;toString() &lt;&lt; "\n";
+
+  Widget newWidget = XmlConvert&lt;Widget&gt;::fromXmlElement(pElem);
+  std::cout &lt;&lt; "\n  newWidget = <button type="button" sytle= "display:inline" onclick="showHide('id4');">+</button><div id="id4" style="">{ " &lt;&lt; newWidget.name &lt;&lt; ", " &lt;&lt; newWidget.pi &lt;&lt; " </div>}";
+
+  std::cout &lt;&lt; "\n\n";
+</div>}</div>}</PRE>
+</body>
+</html>
